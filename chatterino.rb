@@ -3,43 +3,51 @@ require 'json'
 
 class Chat
   def initialize
-    @channels = {}
-    @online = {}
+    @channels = Hash.new { |hash, key| hash[key] = EM::Channel.new }
+    @online = Hash.new { |hash, key| hash[key] = [] }
   end
 
   def method_missing(_m, *_args)
     puts 'Invalid method called'
   end
 
-  def get_chans(ws) 
+  def get_chans(ws)
     ws.send(@channels.keys.to_json)
   end
- 
+
   def get_online(ws, cname)
-    puts @online
     ws.send(@online[cname][:list].to_json) if @online[cname]
   end
 
   def new_chan(ws, cname, user)
     @channels[cname] = EM::Channel.new
+    @online[cname] = []
     subscribe(ws, cname, user)
   end
 
   def subscribe(ws, cname, user)
-    if @online[cname]
-      @online[cname][:list] << user
-    else
-      @online[cname] = { list: [user] }
-    end
-
-    @channels[cname].subscribe { |m| ws.send(m) }
-    @channels[cname].push("#{user} joined the chat")
+    sid = @channels[cname].subscribe { |m| ws.send(m) }
+    @online[cname] << {user: user, sid: sid}
+    msg = {author: cname, msg: "#{user} joined the chat"}.to_json
+    @channels[cname].push msg
   end
 
-  def send_msg(_ws, cname, user, *msg)
+  def send_msg(ws, cname, user, *words)
+    unless @channels[cname]
+      ws.send({author: 'server', msg: 'Invalid channel'}.to_json)
+      return
+    end
     str = ''
-    msg.map { |w| str += "#{w} " }
-    @channels[cname].push "#{user}: #{str}"
+    words.map { |w| str += "#{w} " }
+    m = {author: user, msg: str}.to_json
+    @channels[cname].push m
+  end
+
+  def unsubscribe(ws, cname, user)
+    return unless @channels[cname]
+    users = @online[cname].select{ |elem| elem[:user] == user }
+    users.each {|elem| @channels[cname].unsubscribe elem[:sid] }
+    ws.send({author: 'server', msg: 'Goodbye'}.to_json)
   end
 end
 
