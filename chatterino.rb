@@ -45,7 +45,7 @@ class Chat
       return
     end
     # Do not send messages if the user does not belong to this channel
-    return unless @online[cname].include? user
+    return unless find_user(cname, user).empty?
     str = ''
     words.map { |w| str += "#{w} " }
     jsonify(cname, user, str)
@@ -54,7 +54,7 @@ class Chat
   # Unsubscribes `user` from `cname` and sends back a warm goodbye
   def unsubscribe(ws, cname, user)
     return unless @channels[cname]
-    users = @online[cname].select{ |elem| elem[:user] == user }
+    users = find_user(cname, user)
     users.each {|elem| @channels[cname].unsubscribe elem[:sid] }
     @online[cname].delete_if { |elem| elem[:user] == user }
     ws.send({author: 'server', msg: 'Goodbye'}.to_json)
@@ -81,7 +81,11 @@ class Chat
     @channels[cname].push msg
   end
 
-  private :jsonify
+  def find_user(cname, user)
+    @online[cname].select{ |elem| elem[:user] == user }
+  end
+
+  private :jsonify, :find_user
 end
 
 @chat = Chat.new
