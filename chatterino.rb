@@ -7,6 +7,7 @@ class Chat
     @channels = Hash.new { |hash, key| hash[key] = EM::Channel.new }
     # Do the same for online users
     @online = Hash.new { |hash, key| hash[key] = [] }
+    @admins = Hash.new { |hash,key| hash[key] = [] }
   end
 
   def method_missing(_m, *_args)
@@ -56,6 +57,19 @@ class Chat
     @online[cname].delete_if { |elem| elem[:user] == user }
     ws.send({author: 'server', msg: 'Goodbye'}.to_json)
     jsonify(cname, cname, "#{user} left the chat")
+  end
+
+  def add_admin(ws, cname, user)
+    @admins[cname] << user
+  end
+
+  def kick(ws, cname, admin, user)
+    if @admins[cname].include? admin
+      unsubscribe(ws, cname, user)
+      @channels[cname].push jsonify(cname, cname, "#{admin} kicked #{user}")
+      return
+    end
+    ws.send({ author: 'server', msg: 'Not enough permissions' }.to_json)
   end
 
   def jsonify(cname, author, message)
