@@ -44,6 +44,8 @@ class Chat
       ws.send({author: 'server', msg: 'Invalid channel'}.to_json)
       return
     end
+    # Do not send messages if the user does not belong to this channel
+    return unless @online[cname].include? user
     str = ''
     words.map { |w| str += "#{w} " }
     jsonify(cname, user, str)
@@ -65,8 +67,10 @@ class Chat
 
   def kick(ws, cname, admin, user)
     if @admins[cname].include? admin
+      # Just unsubscribe the user to "kick" it
       unsubscribe(ws, cname, user)
-      @channels[cname].push jsonify(cname, cname, "#{admin} kicked #{user}")
+      # And shame it in front of everybody
+      jsonify(cname, cname, "#{admin} kicked #{user}")
       return
     end
     ws.send({ author: 'server', msg: 'Not enough permissions' }.to_json)
